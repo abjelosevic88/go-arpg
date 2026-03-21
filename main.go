@@ -10,7 +10,10 @@ import (
 func main() {
 	ebiten.SetWindowSize(1024, 768)
 	ebiten.SetWindowTitle("ARPG")
-	g := game.NewGame()
+	g, err := game.NewGame()
+	if err != nil {
+		log.Fatal(err)
+	}
 	if err := ebiten.RunGame(g); err != nil {
 		log.Fatal(err)
 	}

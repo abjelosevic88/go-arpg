@@ -2,12 +2,14 @@
 package game
 
 import (
-	"image/color"
+	"fmt"
 
+	"github.com/abjeloevic88/go-game/asset"
 	"github.com/abjeloevic88/go-game/component"
 	"github.com/abjeloevic88/go-game/config"
 	"github.com/abjeloevic88/go-game/ecs"
 	"github.com/abjeloevic88/go-game/system"
+	"github.com/abjeloevic88/go-game/tmx"
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
@@ -17,27 +19,41 @@ type Game struct {
 }
 
 // NewGame creates a Game, initializes the player entity and registers all systems.
-func NewGame() *Game {
+// Returns an error if any asset fails to load.
+func NewGame() (*Game, error) {
 	w := ecs.NewWorld()
+
+	// Load the player sprite sheet and extract the first 32×32 frame.
+	playerSheet, err := asset.LoadImage("assets/player.png")
+	if err != nil {
+		return nil, err
+	}
+	playerFrame, err := asset.SubImage(playerSheet, 0, 0, config.SpriteSize, config.SpriteSize)
+	if err != nil {
+		return nil, err
+	}
+
+	// Load tilemap from TMX (automatically resolves TSX tileset and spritesheet).
+	tm, err := tmx.LoadMapFromTMX("maps/map.tmx")
+	if err != nil {
+		return nil, fmt.Errorf("load map: %w", err)
+	}
 
 	// Create the player entity.
 	player := w.CreateEntity()
 	w.AddPosition(player, &component.Position{X: config.ScreenWidth / 2, Y: config.ScreenHeight / 2})
 	w.AddVelocity(player, &component.Velocity{X: 0, Y: 0})
-
-	// Create a 32×32 bright-green placeholder sprite.
-	img := ebiten.NewImage(config.SpriteSize, config.SpriteSize)
-	img.Fill(color.RGBA{0, 255, 0, 255})
-	w.AddSprite(player, &component.Sprite{Image: img})
+	w.AddSprite(player, &component.Sprite{Image: playerFrame})
 
 	// Register update systems in order: Input → Movement.
 	w.AddSystem(&system.InputSystem{})
 	w.AddSystem(&system.MovementSystem{})
 
-	// Register draw systems.
+	// Register draw systems: TilemapRenderer first (background), then RenderSystem (entities).
+	w.AddDrawSystem(&system.TilemapRenderer{Map: tm})
 	w.AddDrawSystem(&system.RenderSystem{})
 
-	return &Game{World: w}
+	return &Game{World: w}, nil
 }
 
 // Update delegates to the World's update systems.
